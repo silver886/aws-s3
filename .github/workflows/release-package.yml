@@ -1,0 +1,55 @@
+name: Node.js package
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v2
+        with:
+          node-version: 14
+          check-latest: true
+      - name: Clean install dependencies
+        run: npm ci
+      - name: Test
+        run: npm test
+
+  publish:
+    name: Publish
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Setup Node.js environment
+        uses: actions/setup-node@v2
+        with:
+          node-version: 14
+          check-latest: true
+      - name: Clean install dependencies
+        run: npm ci
+      - name: Setup Node.js environment for GitHub Package Registry
+        uses: actions/setup-node@v2
+        with:
+          scope: ${{github.repository_owner}}
+          registry-url: https://npm.pkg.github.com/
+      - name: Publish package to GitHub Package Registry
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.GITHUB}}
+      - name: Setup Node.js environment for npm
+        uses: actions/setup-node@v2
+        with:
+          scope: ${{github.repository_owner}}
+          registry-url: https://registry.npmjs.org/
+      - name: Publish package to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{secrets.NPM}}
