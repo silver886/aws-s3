@@ -29,6 +29,7 @@
   },
   "homepage": "https://github.com/silver886/aws-s3-access-point#readme",
   "devDependencies": {
+    "@aws-cdk/assert": "^1.110.0",
     "@silver886/eslint-config": "^1.0.2",
     "@types/jest": "^26.0.23",
     "@types/node": "^14.14.31",

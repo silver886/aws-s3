@@ -1,7 +1,7 @@
 module.exports = {
     testEnvironment: 'node',
     roots: [
-        '<rootDir>/dist/test',
+        '<rootDir>/lib/test',
     ],
     testMatch: [
         '**/*.test.js',
