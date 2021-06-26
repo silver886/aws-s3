@@ -6,5 +6,7 @@
 /tsconfig.json
 /src
 /test
+/lib/src
+/lib/test
 /dist
 /coverage
