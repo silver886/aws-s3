@@ -1,6 +1,6 @@
 {
   "name": "@silver886/aws-s3-access-point",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Helpers for AWS S3 Access Points",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
