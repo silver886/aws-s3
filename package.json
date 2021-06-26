@@ -1,9 +1,9 @@
 {
-  "name": "@silver886/TypeScript",
+  "name": "@silver886/aws-s3-access-point",
   "version": "0.0.0",
-  "description": "TypeScript template",
-  "main": "./dist/index.js", // Use lib for npm package.
-  "types": "./dist/index.d.ts", // Use lib for npm package.
+  "description": "Helpers for AWS S3 Access Points",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
   "scripts": {
     "comments": "leasot --ignore node_modules/** .git/** --tags NOTE OPTIMIZE TODO HACK XXX FIXME BUG --filetype .ts **",
     "lint": "eslint .",
@@ -16,7 +16,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/silver886/TypeScript.git"
+    "url": "git+https://github.com/silver886/aws-s3-access-point.git"
   },
   "keywords": [],
   "author": {
@@ -25,9 +25,9 @@
   },
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/silver886/TypeScript/issues"
+    "url": "https://github.com/silver886/aws-s3-access-point/issues"
   },
-  "homepage": "https://github.com/silver886/TypeScript#readme",
+  "homepage": "https://github.com/silver886/aws-s3-access-point#readme",
   "devDependencies": {
     "@silver886/eslint-config": "^1.0.2",
     "@types/jest": "^26.0.23",

@@ -8,9 +8,9 @@
     "typeRoots": [
       "./node_modules/@types"
     ],
-    "outDir": "./dist", // Use lib for npm package.
+    "outDir": "./lib",
     "alwaysStrict": true,
-    "declaration": true, // Use false for webpack.
+    "declaration": true,
     "experimentalDecorators": true,
     "inlineSourceMap": true,
     "inlineSources": true,
