@@ -1,7 +1,7 @@
 import '@aws-cdk/assert/jest';
 import * as cdk from '@aws-cdk/core';
 
-import * as src from '../src';
+import * as src from '../src/';
 
 describe('Access Point', () => {
     // GIVEN
