@@ -10,8 +10,6 @@ export interface ObjectAccessPointProps extends AccessPointProps {
     readonly key: string;
 
     readonly policyStatements: iam.PolicyStatement[];
-
-    readonly actions: string[];
 }
 
 export class ObjectAccessPoint extends AccessPoint {
