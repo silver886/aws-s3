@@ -18,7 +18,10 @@
     "type": "git",
     "url": "git+https://github.com/silver886/aws-s3.git"
   },
-  "keywords": [],
+  "keywords": [
+    "aws",
+    "s3"
+  ],
   "author": {
     "name": "Leo Liu",
     "email": "karta1041337@gmail.com"
