@@ -26,22 +26,25 @@ export class ObjectAccessPoint extends AccessPoint {
             v.addResources(`${this.arn}/object/${props.key}`);
         });
 
+        const sdkCall: customResources.AwsSdkCall = {
+            service:    'S3Control',
+            action:     'putAccessPointPolicy',
+            parameters: {
+                /* eslint-disable @typescript-eslint/naming-convention */
+                AccountId: cdk.Stack.of(this).account,
+                Name:      this.name,
+                Policy:    JSON.stringify(new iam.PolicyDocument({statements: props.policyStatements})),
+                /* eslint-enable @typescript-eslint/naming-convention */
+            },
+            physicalResourceId: customResources.PhysicalResourceId.of(this.node.addr),
+        };
+
         // eslint-disable-next-line no-new
         new customResources.AwsCustomResource(this, 'policy', {
             resourceType: 'Custom::S3Control-putAccessPointPolicy',
-            onCreate:     {
-                service:    'S3Control',
-                action:     'putAccessPointPolicy',
-                parameters: {
-                    /* eslint-disable @typescript-eslint/naming-convention */
-                    AccountId: cdk.Stack.of(this).account,
-                    Name:      this.name,
-                    Policy:    JSON.stringify(new iam.PolicyDocument({statements: props.policyStatements})),
-                    /* eslint-enable @typescript-eslint/naming-convention */
-                },
-                physicalResourceId: customResources.PhysicalResourceId.of(this.node.addr),
-            },
-            policy: customResources.AwsCustomResourcePolicy.fromStatements([
+            onCreate:     sdkCall,
+            onUpdate:     sdkCall,
+            policy:       customResources.AwsCustomResourcePolicy.fromStatements([
                 new iam.PolicyStatement({
                     effect:  iam.Effect.ALLOW,
                     actions: [
