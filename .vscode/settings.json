@@ -3,7 +3,19 @@
         "**/node_modules/": true
     },
     "cSpell.words": [
+        "Epel",
+        "FRESHCLAM",
         "accesspoint",
-        "leasot"
+        "chkconfig",
+        "clamav",
+        "clamd",
+        "clamdscan",
+        "clamscan",
+        "exitstatus",
+        "leasot",
+        "rubysl",
+        "securerandom",
+        "sysconfig",
+        "xvda"
     ]
 }
