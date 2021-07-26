@@ -15,7 +15,7 @@ import * as sqs from '@aws-cdk/aws-sqs';
 
 import * as ec2Helper from './ec2/';
 
-interface VirusScanProps{
+export interface VirusScanProps {
     readonly action: {
         readonly deleteInfected: boolean;
         readonly reportClean: boolean;

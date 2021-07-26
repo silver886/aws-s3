@@ -4,7 +4,7 @@ import type * as ec2 from '@aws-cdk/aws-ec2';
 import type * as iam from '@aws-cdk/aws-iam';
 import * as s3 from '@aws-cdk/aws-s3';
 
-export enum NetworkOrigin{
+export enum NetworkOrigin {
     VPC = 'VPC',
     INTERNET = 'Internet',
 }
