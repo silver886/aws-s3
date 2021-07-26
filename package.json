@@ -11,7 +11,7 @@
     "watch-test": "npm test -- --watchAll",
     "pretest": "tsc -p ./test/tsconfig.json",
     "test": "jest --coverage",
-    "prepare": "tsc",
+    "prepare": "tsc && ts-node ./script/typescript/lambda-bundle.ts",
     "prepublishOnly": "npm test"
   },
   "repository": {
@@ -34,10 +34,12 @@
   "devDependencies": {
     "@aws-cdk/assert": "^1.115.0",
     "@silver886/eslint-config": "^1.0.8",
+    "@types/concurrently": "^6.2.1",
     "@types/jest": "^26.0.24",
     "@types/node": "^14.14.31",
     "@typescript-eslint/eslint-plugin": "^4.28.4",
     "@typescript-eslint/parser": "^4.28.4",
+    "concurrently": "^6.2.0",
     "eslint": "^7.31.0",
     "jest": "^27.0.6",
     "leasot": "^12.0.0",
@@ -50,9 +52,9 @@
     "@aws-cdk/aws-cloudwatch-actions": "^1.115.0",
     "@aws-cdk/aws-ec2": "^1.115.0",
     "@aws-cdk/aws-iam": "^1.115.0",
+    "@aws-cdk/aws-lambda": "^1.115.0",
     "@aws-cdk/aws-logs": "^1.115.0",
     "@aws-cdk/aws-s3": "^1.115.0",
-    "@aws-cdk/aws-s3-notifications": "^1.115.0",
     "@aws-cdk/aws-sns": "^1.115.0",
     "@aws-cdk/aws-sqs": "^1.115.0",
     "@aws-cdk/core": "^1.115.0",

@@ -5,9 +5,9 @@ import * as cloudwatch from '@aws-cdk/aws-cloudwatch';
 import * as cloudwatchActions from '@aws-cdk/aws-cloudwatch-actions';
 import * as ec2 from '@aws-cdk/aws-ec2';
 import * as iam from '@aws-cdk/aws-iam';
+import * as lambda from '@aws-cdk/aws-lambda';
 import * as logs from '@aws-cdk/aws-logs';
 import type * as s3 from '@aws-cdk/aws-s3';
-import * as s3Notifications from '@aws-cdk/aws-s3-notifications';
 import * as sCdk from '@silver886/aws-cdk';
 import * as sEc2 from '@silver886/aws-ec2';
 import * as sns from '@aws-cdk/aws-sns';
@@ -15,7 +15,7 @@ import * as sqs from '@aws-cdk/aws-sqs';
 
 import * as ec2Helper from './ec2/';
 
-interface StackProps extends cdk.StackProps {
+interface VirusScanProps{
     readonly action: {
         readonly deleteInfected: boolean;
         readonly reportClean: boolean;
@@ -34,20 +34,30 @@ interface StackProps extends cdk.StackProps {
     readonly snsTopic?: sns.ITopic;
 }
 
-export class Stack extends cdk.Stack {
+export class VirusScan extends cdk.Construct {
     public readonly ec2Vpc: ec2.IVpc;
 
     public readonly snsTopic: sns.ITopic;
 
-    private readonly sqsQueue: sqs.Queue;
-
     private readonly iamRole: iam.Role;
 
-    private readonly props: StackProps;
+    private readonly iamPolicyStatement: iam.PolicyStatement = new iam.PolicyStatement({
+        effect:  iam.Effect.ALLOW,
+        actions: [
+            's3:PutBucketNotification',
+        ],
+    });
+
+    private readonly lambdaFunction: {
+        readonly sqsGrantSend: lambda.Function;
+        readonly s3PutNotification: lambda.Function;
+    };
+
+    private readonly props: VirusScanProps;
 
     // eslint-disable-next-line max-lines-per-function, max-statements
-    public constructor(scope: cdk.Construct, id: string, props: StackProps) {
-        super(scope, id, props);
+    public constructor(scope: cdk.Construct, id: string, props: VirusScanProps) {
+        super(scope, id);
         this.props = props;
 
         /* eslint-disable @typescript-eslint/no-magic-numbers */
@@ -71,13 +81,12 @@ export class Stack extends cdk.Stack {
         this.ec2Vpc = ec2Vpc;
 
         const snsTopic = props.snsTopic ?? new sns.Topic(this, 'topic', {
-            displayName: props.description ?? cdk.Stack.of(this).stackName,
+            displayName: `${cdk.Stack.of(scope).stackName}: Virus scan notification`,
         });
         this.snsTopic = snsTopic;
 
         const deadLetterQueue = new sqs.Queue(this, 'queue-dead-letter', {
             retentionPeriod: cdk.Duration.days(14), // eslint-disable-line @typescript-eslint/no-magic-numbers
-            removalPolicy:   props.terminationProtection ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
         });
 
         const scanQueue = new sqs.Queue(this, 'queue', {
@@ -86,18 +95,49 @@ export class Stack extends cdk.Stack {
                 queue:           deadLetterQueue,
                 maxReceiveCount: 3,
             },
-            removalPolicy: props.terminationProtection ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
         });
-        this.sqsQueue = scanQueue;
+
+        this.lambdaFunction = {
+            sqsGrantSend: new lambda.Function(scanQueue, 'lambda', {
+                description:   `${cdk.Stack.of(scope).stackName}: SQS Queue send message permission`,
+                initialPolicy: [
+                    new iam.PolicyStatement({
+                        effect:  iam.Effect.ALLOW,
+                        actions: [
+                            'sqs:GetQueueAttributes',
+                            'sqs:SetQueueAttributes',
+                        ],
+                        resources: [
+                            scanQueue.queueArn,
+                        ],
+                    }),
+                ],
+                environment: {
+                    sqsArn: scanQueue.queueArn,
+                    sqsUrl: scanQueue.queueUrl,
+                },
+                runtime: lambda.Runtime.NODEJS_14_X,
+                code:    lambda.Code.fromAsset(`${__dirname}/lambda/sqs-grant-send`),
+                handler: 'bundle.handler',
+            }),
+            s3PutNotification: new lambda.Function(scanQueue, 'lambda', {
+                description: `${cdk.Stack.of(scope).stackName}: S3 Object creation notification configuration`,
+                environment: {
+                    sqsArn: scanQueue.queueArn,
+                },
+                runtime: lambda.Runtime.NODEJS_14_X,
+                code:    lambda.Code.fromAsset(`${__dirname}/lambda/s3-put-notification`),
+                handler: 'bundle.handler',
+            }),
+        };
 
         const logGroup = new logs.LogGroup(this, 'log', {
-            retention:     logs.RetentionDays.FIVE_YEARS,
-            removalPolicy: props.terminationProtection ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+            retention: logs.RetentionDays.FIVE_YEARS,
         });
 
         const role = new iam.Role(this, 'role', {
             assumedBy:       new iam.ServicePrincipal('ec2.amazonaws.com'),
-            description:     `${props.description ?? cdk.Stack.of(this).stackName}: EC2`,
+            description:     `${cdk.Stack.of(this).stackName}: EC2 virus scanner`,
             managedPolicies: [
                 iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
                 iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
@@ -198,7 +238,7 @@ export class Stack extends cdk.Stack {
                             },
                         },
                         metrics: {
-                            namespace:         cdk.Stack.of(this).stackName,
+                            namespace:         `${cdk.Stack.of(this).stackName}/VirusScan`,
                             append_dimensions: {
                                 InstanceType:         '${aws:InstanceType}',
                                 AutoScalingGroupName: '${aws:AutoScalingGroupName}',
@@ -302,7 +342,7 @@ export class Stack extends cdk.Stack {
 
         const scanQueueVisibleMessagesPeriod = 5;
         new cloudwatch.Alarm(scanQueue, 'alarm-number_of_visible_messages_too_high', {
-            alarmDescription: `${props.description ?? cdk.Stack.of(this).stackName}: SQS maximum number of visible messages over last ${scanQueueVisibleMessagesPeriod} minutes higher than 1`,
+            alarmDescription: `${cdk.Stack.of(this).stackName}: SQS maximum number of visible messages over last ${scanQueueVisibleMessagesPeriod} minutes higher than 1`,
             metric:           new cloudwatch.Metric({
                 namespace:  'AWS/SQS',
                 metricName: 'ApproximateNumberOfMessagesVisible',
@@ -321,7 +361,7 @@ export class Stack extends cdk.Stack {
         }).addAlarmAction(new cloudwatchActions.AutoScalingAction(stepScalingUp));
 
         new cloudwatch.Alarm(scanQueue, 'alarm-number_of_visible_messages_too_low', {
-            alarmDescription: `${props.description ?? cdk.Stack.of(this).stackName}: SQS maximum number of visible messages over last ${scanQueueVisibleMessagesPeriod} minutes lower than 1`,
+            alarmDescription: `${cdk.Stack.of(this).stackName}: SQS maximum number of visible messages over last ${scanQueueVisibleMessagesPeriod} minutes lower than 1`,
             metric:           new cloudwatch.Metric({
                 namespace:  'AWS/SQS',
                 metricName: 'ApproximateNumberOfMessagesVisible',
@@ -341,7 +381,7 @@ export class Stack extends cdk.Stack {
 
         const statusAlarmPeriod = 1;
         new cloudwatch.Alarm(deadLetterQueue, 'alarm-has_messages', {
-            alarmDescription: `${props.description ?? cdk.Stack.of(this).stackName}: SQS dead letter queue has messages`,
+            alarmDescription: `${cdk.Stack.of(this).stackName}: SQS dead letter queue has messages`,
             metric:           new cloudwatch.Metric({
                 namespace:  'AWS/SQS',
                 metricName: 'ApproximateNumberOfMessagesVisible',
@@ -361,7 +401,7 @@ export class Stack extends cdk.Stack {
 
         const scanQueueMessageAge = 1;
         new cloudwatch.Alarm(scanQueue, `alarm-contains_messages_older_than_${scanQueueMessageAge}_hour`, {
-            alarmDescription: `${props.description ?? cdk.Stack.of(this).stackName}: SQS scan queue contains messages older than ${scanQueueMessageAge} hour`,
+            alarmDescription: `${cdk.Stack.of(this).stackName}: SQS scan queue contains messages older than ${scanQueueMessageAge} hour`,
             metric:           new cloudwatch.Metric({
                 namespace:  'AWS/SQS',
                 metricName: 'ApproximateAgeOfOldestMessage',
@@ -381,10 +421,32 @@ export class Stack extends cdk.Stack {
     }
 
     // eslint-disable-next-line max-lines-per-function
-    public hookS3Bucket(bucket: s3.Bucket): void {
+    public hookS3Bucket(bucket: s3.Bucket): sCdk.Name {
         const nestedScope = new sCdk.Name(bucket, 'virus-scanner');
 
-        bucket.addObjectCreatedNotification(new s3Notifications.SqsDestination(sqs.Queue.fromQueueArn(nestedScope, 'queue', this.sqsQueue.queueArn)));
+        const {iamPolicyStatement} = this;
+        iamPolicyStatement.addResources(bucket.bucketArn);
+        this.lambdaFunction.s3PutNotification.addToRolePolicy(iamPolicyStatement);
+
+        // eslint-disable-next-line no-new
+        new cdk.CustomResource(nestedScope, 'custom-resource-sqs', {
+            resourceType: 'Custom::SQS-updateQueuePolicy',
+            properties:   {
+                account: cdk.Stack.of(bucket).account,
+                s3Arn:   bucket.bucketArn,
+            },
+            serviceToken: this.lambdaFunction.sqsGrantSend.functionArn,
+        });
+
+        // eslint-disable-next-line no-new
+        new cdk.CustomResource(nestedScope, 'custom-resource-s3', {
+            resourceType: 'Custom::S3-updateBucketNotification',
+            properties:   {
+                account: cdk.Stack.of(bucket).account,
+                s3Name:  bucket.bucketName,
+            },
+            serviceToken: this.lambdaFunction.s3PutNotification.functionArn,
+        });
 
         this.iamRole.attachInlinePolicy(new iam.Policy(nestedScope, 'policy-read', {
             document: new iam.PolicyDocument({
@@ -454,5 +516,7 @@ export class Stack extends cdk.Stack {
                 }),
             }));
         }
+
+        return nestedScope;
     }
 }
