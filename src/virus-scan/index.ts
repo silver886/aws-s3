@@ -98,7 +98,7 @@ export class VirusScan extends cdk.Construct {
         });
 
         this.lambdaFunction = {
-            sqsGrantSend: new lambda.Function(scanQueue, 'lambda', {
+            sqsGrantSend: new lambda.Function(scanQueue, 'lambda-sqs-grant-send', {
                 description:   `${cdk.Stack.of(scope).stackName}: SQS Queue send message permission`,
                 initialPolicy: [
                     new iam.PolicyStatement({
@@ -120,7 +120,7 @@ export class VirusScan extends cdk.Construct {
                 code:    lambda.Code.fromAsset(`${__dirname}/lambda/sqs-grant-send`),
                 handler: 'bundle.handler',
             }),
-            s3PutNotification: new lambda.Function(scanQueue, 'lambda', {
+            s3PutNotification: new lambda.Function(scanQueue, 'lambda-s3-put-notification', {
                 description: `${cdk.Stack.of(scope).stackName}: S3 Object creation notification configuration`,
                 environment: {
                     sqsArn: scanQueue.queueArn,
