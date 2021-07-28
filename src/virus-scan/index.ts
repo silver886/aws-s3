@@ -200,7 +200,6 @@ export class VirusScan extends cdk.Construct {
                         ...props.autoScaling.swapSize ? ['swap'] : [],
                         'cloudwatch',
                         'enableEpel',
-                        'installEpel',
                         'config',
                     ],
                 },
@@ -267,11 +266,8 @@ export class VirusScan extends cdk.Construct {
                         },
                         /* eslint-enable @typescript-eslint/naming-convention */
                     }),
-                    enableEpel:  sEc2.init.config.epel.enable(),
-                    installEpel: new ec2.InitConfig([
-                        ec2.InitPackage.yum('epel-release'),
-                    ]),
-                    config: ec2Helper.init.config.clam.service({
+                    enableEpel: sEc2.init.config.epel.enable(),
+                    config:     ec2Helper.init.config.clam.service({
                         deleteInfected: props.action.deleteInfected,
                         reportClean:    props.action.reportClean,
                         tagKey:         props.action.tagKey,
