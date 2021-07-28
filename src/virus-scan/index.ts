@@ -41,13 +41,6 @@ export class VirusScan extends cdk.Construct {
 
     private readonly iamRole: iam.Role;
 
-    private readonly iamPolicyStatement: iam.PolicyStatement = new iam.PolicyStatement({
-        effect:  iam.Effect.ALLOW,
-        actions: [
-            's3:PutBucketNotification',
-        ],
-    });
-
     private readonly lambdaFunction: {
         readonly sqsGrantSend: lambda.Function;
         readonly s3PutNotification: lambda.Function;
@@ -420,19 +413,7 @@ export class VirusScan extends cdk.Construct {
     public hookS3Bucket(bucket: s3.Bucket): sCdk.Name {
         const nestedScope = new sCdk.Name(bucket, 'virus-scanner');
 
-        const {iamPolicyStatement} = this;
-        iamPolicyStatement.addResources(bucket.bucketArn);
-        this.lambdaFunction.s3PutNotification.addToRolePolicy(iamPolicyStatement);
-
-        // eslint-disable-next-line no-new
-        new cdk.CustomResource(nestedScope, 'custom-resource-sqs', {
-            resourceType: 'Custom::SQS-updateQueuePolicy',
-            properties:   {
-                account: cdk.Stack.of(bucket).account,
-                s3Arn:   bucket.bucketArn,
             },
-            serviceToken: this.lambdaFunction.sqsGrantSend.functionArn,
-        });
 
         // eslint-disable-next-line no-new
         new cdk.CustomResource(nestedScope, 'custom-resource-s3', {
@@ -442,74 +423,67 @@ export class VirusScan extends cdk.Construct {
                 s3Name:  bucket.bucketName,
             },
             serviceToken: this.lambdaFunction.s3PutNotification.functionArn,
-        });
 
         this.iamRole.attachInlinePolicy(new iam.Policy(nestedScope, 'policy-read', {
-            document: new iam.PolicyDocument({
+            statements: [
+                new iam.PolicyStatement({
+                    effect:  iam.Effect.ALLOW,
+                    actions: [
+                        's3:GetObject*',
+                    ],
+                    resources: [
+                        bucket.arnForObjects('*'),
+                    ],
+                }),
+                new iam.PolicyStatement({
+                    effect:  iam.Effect.ALLOW,
+                    actions: [
+                        's3:ListBucket*',
+                    ],
+                    resources: [
+                        bucket.bucketArn,
+                    ],
+                }),
+            ],
+        }));
+
+        if (this.props.action.deleteInfected) {
+            this.iamRole.attachInlinePolicy(new iam.Policy(nestedScope, 'policy-delete', {
                 statements: [
                     new iam.PolicyStatement({
                         effect:  iam.Effect.ALLOW,
                         actions: [
-                            's3:GetObject*',
+                            's3:DeleteObject*',
                         ],
                         resources: [
                             bucket.arnForObjects('*'),
                         ],
                     }),
-                    new iam.PolicyStatement({
-                        effect:  iam.Effect.ALLOW,
-                        actions: [
-                            's3:ListBucket*',
-                        ],
-                        resources: [
-                            bucket.bucketArn,
-                        ],
-                    }),
                 ],
-            }),
-        }));
-
-        if (this.props.action.deleteInfected) {
-            this.iamRole.attachInlinePolicy(new iam.Policy(nestedScope, 'policy-delete', {
-                document: new iam.PolicyDocument({
-                    statements: [
-                        new iam.PolicyStatement({
-                            effect:  iam.Effect.ALLOW,
-                            actions: [
-                                's3:DeleteObject*',
-                            ],
-                            resources: [
-                                bucket.arnForObjects('*'),
-                            ],
-                        }),
-                    ],
-                }),
             }));
         }
 
         if (this.props.action.tagKey) {
             this.iamRole.attachInlinePolicy(new iam.Policy(nestedScope, 'policy-tag', {
-                document: new iam.PolicyDocument({
-                    statements: [
-                        new iam.PolicyStatement({
-                            effect:  iam.Effect.ALLOW,
-                            actions: [
-                                's3:PutObjectTagging',
-                                's3:PutObjectVersionTagging',
-                            ],
-                            resources: [
-                                bucket.arnForObjects('*'),
-                            ],
-                            conditions: {
-                                /* eslint-disable @typescript-eslint/naming-convention */
-                                'ForAllValues:StringLike': {
-                                    's3:RequestObjectTagKeys': this.props.action.tagKey,
-                                },
-                                /* eslint-enable @typescript-eslint/naming-convention */
+                statements: [
+                    new iam.PolicyStatement({
+                        effect:  iam.Effect.ALLOW,
+                        actions: [
+                            's3:PutObjectTagging',
+                            's3:PutObjectVersionTagging',
+                        ],
+                        resources: [
+                            bucket.arnForObjects('*'),
+                        ],
+                        conditions: {
+                            /* eslint-disable @typescript-eslint/naming-convention */
+                            'ForAllValues:StringLike': {
+                                's3:RequestObjectTagKeys': this.props.action.tagKey,
                             },
-                        }),
-                    ],
-                }),
+                            /* eslint-enable @typescript-eslint/naming-convention */
+                        },
+                    }),
+                ],
             }));
         }
 
