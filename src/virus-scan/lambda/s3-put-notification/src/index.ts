@@ -11,7 +11,7 @@ async function s3GetNotification(account: string, bucketName: string): Promise<s
         /* eslint-enable @typescript-eslint/naming-convention */
     }).promise();
     // eslint-disable-next-line no-console
-    console.log(`Get ${bucketName} queue notification: ${(data.QueueConfigurations ?? 'unknown').toString()}`);
+    console.log(`Get ${bucketName} queue notification: ${data.QueueConfigurations ? JSON.stringify(data.QueueConfigurations) : 'unknown'}`);
 
     // eslint-disable-next-line no-console
     if (!data.QueueConfigurations) console.error(`${bucketName} queue notification is undefined or empty.`);
