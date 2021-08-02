@@ -1,6 +1,6 @@
 {
   "name": "@silver886/aws-s3",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Helpers for AWS S3",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
