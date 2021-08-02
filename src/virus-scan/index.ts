@@ -440,6 +440,36 @@ export class VirusScan extends cdk.Construct {
             },
             physicalResourceId: customResources.PhysicalResourceId.of(s3NotificationPolicy.node.addr),
         };
+        const s3Policy = new customResources.AwsCustomResource(s3NotificationPolicy, 'custom-resource', {
+            resourceType: 'Custom::IAM-putRolePolicy',
+            onCreate:     sdkCall,
+            onUpdate:     sdkCall,
+            onDelete:     {
+                ...sdkCall,
+                action:     'deleteRolePolicy',
+                parameters: {
+                    /* eslint-disable @typescript-eslint/naming-convention */
+                    RoleName:   this.lambdaFunction.s3PutNotification.role?.roleName,
+                    PolicyName: s3NotificationPolicy.logical,
+                    /* eslint-enable @typescript-eslint/naming-convention */
+                },
+            },
+            policy: customResources.AwsCustomResourcePolicy.fromSdkCalls({
+                resources: [
+                    this.lambdaFunction.s3PutNotification.role?.roleArn ?? '',
+                ],
+            }),
+        });
+
+        const sqsPolicy = new cdk.CustomResource(nestedScope, 'custom-resource-sqs', {
+            resourceType: 'Custom::SQS-updateQueuePolicy',
+            properties:   {
+                account: cdk.Stack.of(bucket).account,
+                s3Arn:   bucket.bucketArn,
+            },
+            serviceToken: this.lambdaFunction.sqsGrantSend.functionArn,
+        });
+        sqsPolicy.node.addDependency(s3Policy);
 
         // eslint-disable-next-line no-new
         new cdk.CustomResource(nestedScope, 'custom-resource-s3', {
@@ -449,36 +479,7 @@ export class VirusScan extends cdk.Construct {
                 s3Name:  bucket.bucketName,
             },
             serviceToken: this.lambdaFunction.s3PutNotification.functionArn,
-        }).node.addDependency(
-            new cdk.CustomResource(nestedScope, 'custom-resource-sqs', {
-                resourceType: 'Custom::SQS-updateQueuePolicy',
-                properties:   {
-                    account: cdk.Stack.of(bucket).account,
-                    s3Arn:   bucket.bucketArn,
-                },
-                serviceToken: this.lambdaFunction.sqsGrantSend.functionArn,
-            }),
-            new customResources.AwsCustomResource(s3NotificationPolicy, 'custom-resource', {
-                resourceType: 'Custom::IAM-putRolePolicy',
-                onCreate:     sdkCall,
-                onUpdate:     sdkCall,
-                onDelete:     {
-                    ...sdkCall,
-                    action:     'deleteRolePolicy',
-                    parameters: {
-                        /* eslint-disable @typescript-eslint/naming-convention */
-                        RoleName:   this.lambdaFunction.s3PutNotification.role?.roleName,
-                        PolicyName: s3NotificationPolicy.logical,
-                        /* eslint-enable @typescript-eslint/naming-convention */
-                    },
-                },
-                policy: customResources.AwsCustomResourcePolicy.fromSdkCalls({
-                    resources: [
-                        this.lambdaFunction.s3PutNotification.role?.roleArn ?? '',
-                    ],
-                }),
-            }),
-        );
+        }).node.addDependency(sqsPolicy);
 
         this.iamRole.attachInlinePolicy(new iam.Policy(nestedScope, 'policy-read', {
             statements: [
