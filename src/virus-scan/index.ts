@@ -3,6 +3,7 @@ import * as cdk from '@aws-cdk/core';
 import * as autoscaling from '@aws-cdk/aws-autoscaling';
 import * as cloudwatch from '@aws-cdk/aws-cloudwatch';
 import * as cloudwatchActions from '@aws-cdk/aws-cloudwatch-actions';
+import * as customResources from '@aws-cdk/custom-resources';
 import * as ec2 from '@aws-cdk/aws-ec2';
 import * as iam from '@aws-cdk/aws-iam';
 import * as lambda from '@aws-cdk/aws-lambda';
@@ -410,10 +411,35 @@ export class VirusScan extends cdk.Construct {
     }
 
     // eslint-disable-next-line max-lines-per-function
-    public hookS3Bucket(bucket: s3.Bucket): sCdk.Name {
-        const nestedScope = new sCdk.Name(bucket, 'virus-scanner');
+    public hookS3Bucket(scope: cdk.Construct, bucket: s3.IBucket): sCdk.Name {
+        const nestedScope = new sCdk.Name(scope, 'virus-scanner');
 
+        const s3NotificationPolicy = new sCdk.Name(nestedScope, 's3-notification-policy');
+        const sdkCall: customResources.AwsSdkCall = {
+            service:    'IAM',
+            action:     'putRolePolicy',
+            parameters: {
+                /* eslint-disable @typescript-eslint/naming-convention */
+                RoleName:       this.lambdaFunction.s3PutNotification.role?.roleName,
+                PolicyName:     s3NotificationPolicy.logical,
+                PolicyDocument: JSON.stringify(new iam.PolicyDocument({
+                    statements: [
+                        new iam.PolicyStatement({
+                            effect:  iam.Effect.ALLOW,
+                            actions: [
+                                's3:GetBucketNotification',
+                                's3:PutBucketNotification',
+                            ],
+                            resources: [
+                                bucket.bucketArn,
+                            ],
+                        }),
+                    ],
+                })),
+                /* eslint-enable @typescript-eslint/naming-convention */
             },
+            physicalResourceId: customResources.PhysicalResourceId.of(s3NotificationPolicy.node.addr),
+        };
 
         // eslint-disable-next-line no-new
         new cdk.CustomResource(nestedScope, 'custom-resource-s3', {
@@ -423,6 +449,36 @@ export class VirusScan extends cdk.Construct {
                 s3Name:  bucket.bucketName,
             },
             serviceToken: this.lambdaFunction.s3PutNotification.functionArn,
+        }).node.addDependency(
+            new cdk.CustomResource(nestedScope, 'custom-resource-sqs', {
+                resourceType: 'Custom::SQS-updateQueuePolicy',
+                properties:   {
+                    account: cdk.Stack.of(bucket).account,
+                    s3Arn:   bucket.bucketArn,
+                },
+                serviceToken: this.lambdaFunction.sqsGrantSend.functionArn,
+            }),
+            new customResources.AwsCustomResource(s3NotificationPolicy, 'custom-resource', {
+                resourceType: 'Custom::IAM-putRolePolicy',
+                onCreate:     sdkCall,
+                onUpdate:     sdkCall,
+                onDelete:     {
+                    ...sdkCall,
+                    action:     'deleteRolePolicy',
+                    parameters: {
+                        /* eslint-disable @typescript-eslint/naming-convention */
+                        RoleName:   this.lambdaFunction.s3PutNotification.role?.roleName,
+                        PolicyName: s3NotificationPolicy.logical,
+                        /* eslint-enable @typescript-eslint/naming-convention */
+                    },
+                },
+                policy: customResources.AwsCustomResourcePolicy.fromSdkCalls({
+                    resources: [
+                        this.lambdaFunction.s3PutNotification.role?.roleArn ?? '',
+                    ],
+                }),
+            }),
+        );
 
         this.iamRole.attachInlinePolicy(new iam.Policy(nestedScope, 'policy-read', {
             statements: [

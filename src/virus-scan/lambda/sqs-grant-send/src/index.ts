@@ -20,7 +20,8 @@ async function sqsGetQueuePolicy(queueUrl: string): Promise<Json.Object> {
 }
 
 async function sqsPutQueuePolicy(queueUrl: string, policy: Json.Object): Promise<void> {
-    const policyString = JSON.stringify(policy);
+    let policyString = JSON.stringify(policy);
+    if (!(policy.Statement as Json.Array).length) policyString = '';
     // eslint-disable-next-line no-console
     console.log(`Put ${queueUrl} policy: ${policyString}`);
     await SQS_CLIENT.setQueueAttributes({
@@ -43,7 +44,7 @@ function sidFilter(sid: string): (v: Json.Value) => boolean {
     };
 }
 
-// eslint-disable-next-line max-statements
+// eslint-disable-next-line max-lines-per-function, max-statements
 export async function handler(event: cloudformation.CustomResource.Request.Event, context: unknown): Promise<void> {
     const resource = new cloudformation.CustomResource.Handle(event, event.LogicalResourceId);
     const logName = context as {logGroupName: string; logStreamName: string};
@@ -86,7 +87,23 @@ export async function handler(event: cloudformation.CustomResource.Request.Event
     };
 
     try {
-        const policy = await sqsGetQueuePolicy(env.sqsUrl);
+        let policy: Json.Object = {};
+        try {
+            policy = await sqsGetQueuePolicy(env.sqsUrl);
+        } catch (err) {
+            // eslint-disable-next-line no-console
+            console.log('Error: ', err);
+            // eslint-disable-next-line no-console
+            console.error('Cannot get SQS Queue policy, use empty one instead.');
+            policy = {
+                /* eslint-disable @typescript-eslint/naming-convention */
+                Version:   '2012-10-17',
+                Id:        `${env.sqsArn}/S3NotificationPolicy`,
+                Statement: [],
+                /* eslint-enable @typescript-eslint/naming-convention */
+            };
+        }
+
         switch (event.RequestType) {
             case cloudformation.CustomResource.Request.Type.CREATE:
                 (policy.Statement as Json.Array).push(newPolicy);
