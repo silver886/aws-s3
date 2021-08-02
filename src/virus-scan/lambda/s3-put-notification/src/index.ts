@@ -3,6 +3,8 @@ import * as sdk from 'aws-sdk';
 import {env} from 'process';
 const S3_CLIENT = new sdk.S3();
 
+const RETRY_TIMES = 5;
+
 async function s3GetNotification(account: string, bucketName: string): Promise<sdk.S3.NotificationConfiguration> {
     const data = await S3_CLIENT.getBucketNotificationConfiguration({
         /* eslint-disable @typescript-eslint/naming-convention */
@@ -92,48 +94,54 @@ export async function handler(event: cloudformation.CustomResource.Request.Event
         if (oldS3Name !== event.ResourceProperties.s3Name) s3GetNotifications.push(s3GetNotification(oldAccount, oldS3Name));
     }
 
-    try {
-        const [notification, notificationOld] = await Promise.all(s3GetNotifications);
-        switch (event.RequestType) {
-            case cloudformation.CustomResource.Request.Type.CREATE:
-                if (notification.QueueConfigurations) {
-                    notification.QueueConfigurations.push(newNotification);
-                } else {
-                    notification.QueueConfigurations = [newNotification];
-                }
-                break;
-            case cloudformation.CustomResource.Request.Type.DELETE:
-                if (notification.QueueConfigurations?.length) {
-                    notification.QueueConfigurations = notification.QueueConfigurations.
-                        filter(idFilter(event.LogicalResourceId));
-                }
-                break;
-            case cloudformation.CustomResource.Request.Type.UPDATE:
-                if (notificationOld.QueueConfigurations?.length) {
-                    notificationOld.QueueConfigurations = notificationOld.QueueConfigurations.
-                        filter(idFilter(event.LogicalResourceId));
-                }
-                if (notification.QueueConfigurations) {
-                    notification.QueueConfigurations.push(newNotification);
-                } else {
-                    notification.QueueConfigurations = [newNotification];
-                }
-                break;
+    // eslint-disable-next-line no-plusplus
+    for (let i = 0; i < RETRY_TIMES; i++) {
+        /* eslint-disable no-await-in-loop */
+        try {
+            const [notification, notificationOld] = await Promise.all(s3GetNotifications);
+            switch (event.RequestType) {
+                case cloudformation.CustomResource.Request.Type.CREATE:
+                    if (notification.QueueConfigurations) {
+                        notification.QueueConfigurations.push(newNotification);
+                    } else {
+                        notification.QueueConfigurations = [newNotification];
+                    }
+                    break;
+                case cloudformation.CustomResource.Request.Type.DELETE:
+                    if (notification.QueueConfigurations?.length) {
+                        notification.QueueConfigurations = notification.QueueConfigurations.
+                            filter(idFilter(event.LogicalResourceId));
+                    }
+                    break;
+                case cloudformation.CustomResource.Request.Type.UPDATE:
+                    if (notificationOld.QueueConfigurations?.length) {
+                        notificationOld.QueueConfigurations = notificationOld.QueueConfigurations.
+                            filter(idFilter(event.LogicalResourceId));
+                    }
+                    if (notification.QueueConfigurations) {
+                        notification.QueueConfigurations.push(newNotification);
+                    } else {
+                        notification.QueueConfigurations = [newNotification];
+                    }
+                    break;
 
-            // No default
+                // No default
+            }
+
+            const s3PutNotifications: Array<Promise<void>> = [
+                s3PutNotification(event.ResourceProperties.account, event.ResourceProperties.s3Name, notification),
+            ];
+            if (oldS3Name) s3PutNotifications.push(s3PutNotification(oldAccount, oldS3Name, notificationOld));
+
+            await Promise.all(s3PutNotifications);
+
+            await resource.success();
+        } catch (err) {
+            // eslint-disable-next-line no-console
+            console.log('Error: ', err);
+            // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+            if (i === RETRY_TIMES - 1) await resource.failed('Cannot update S3 Bucket notification configuration.');
         }
-
-        const s3PutNotifications: Array<Promise<void>> = [
-            s3PutNotification(event.ResourceProperties.account, event.ResourceProperties.s3Name, notification),
-        ];
-        if (oldS3Name) s3PutNotifications.push(s3PutNotification(oldAccount, oldS3Name, notificationOld));
-
-        await Promise.all(s3PutNotifications);
-
-        await resource.success();
-    } catch (err) {
-        // eslint-disable-next-line no-console
-        console.log('Error: ', err);
-        await resource.failed('Cannot update S3 Bucket notification configuration.');
+        /* eslint-enable no-await-in-loop */
     }
 }
