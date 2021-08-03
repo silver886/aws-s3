@@ -12,8 +12,6 @@ export enum NetworkOrigin {
 export interface AccessPointProps {
     readonly bucket: s3.IBucket;
 
-    readonly name?: string;
-
     readonly policy?: iam.PolicyDocument;
 
     readonly publicAccessBlockConfiguration?: s3.CfnAccessPoint.PublicAccessBlockConfigurationProperty;
@@ -36,24 +34,17 @@ export class AccessPoint extends cdk.Construct {
 
         const accessPoint = new s3.CfnAccessPoint(this, 'access-point', {
             bucket:                         props.bucket.bucketName,
-            name:                           props.name,
             policy:                         JSON.stringify(props.policy),
             publicAccessBlockConfiguration: props.publicAccessBlockConfiguration,
             vpcConfiguration:               {vpcId: props.vpc?.vpcId},
         });
-
-        this.name = props.name ?? accessPoint.ref;
-
-        this.arn = cdk.Arn.format({
-            service:      's3',
-            resource:     'accesspoint',
-            resourceName: this.name,
-        }, cdk.Stack.of(this));
+        this.name = accessPoint.attrName;
+        this.arn = accessPoint.attrArn;
 
         this.policyStatementCondition = {
             /* eslint-disable @typescript-eslint/naming-convention */
             StringEquals: {
-                's3:DataAccessPointArn': this.arn,
+                's3:DataAccessPointArn': accessPoint.attrArn,
             },
             /* eslint-enable @typescript-eslint/naming-convention */
         };

@@ -471,21 +471,6 @@ export class VirusScan extends cdk.Construct {
         });
         sqsPolicy.node.addDependency(s3Policy);
 
-        const delay = new sCdk.Name(s3NotificationPolicy, 'delay');
-        const delaySdkCall: customResources.AwsSdkCall = {
-            service:            'STS',
-            action:             'getCallerIdentity',
-            physicalResourceId: customResources.PhysicalResourceId.of(delay.node.addr),
-        };
-        const sts = new customResources.AwsCustomResource(delay, 'custom-resource', {
-            resourceType: 'Custom::STS-getCallerIdentity',
-            onCreate:     delaySdkCall,
-            onUpdate:     delaySdkCall,
-            onDelete:     delaySdkCall,
-            policy:       customResources.AwsCustomResourcePolicy.fromStatements([]),
-        });
-        sts.node.addDependency(sqsPolicy);
-
         // eslint-disable-next-line no-new
         new cdk.CustomResource(nestedScope, 'custom-resource-s3', {
             resourceType: 'Custom::S3-updateBucketNotification',
@@ -494,7 +479,9 @@ export class VirusScan extends cdk.Construct {
                 s3Name:  bucket.bucketName,
             },
             serviceToken: this.lambdaFunction.s3PutNotification.functionArn,
-        }).node.addDependency(sts);
+        }).node.addDependency(new sCdk.Delay(nestedScope, 'delay', {
+            dependencies: [sqsPolicy],
+        }));
 
         this.iamRole.attachInlinePolicy(new iam.Policy(nestedScope, 'policy-read', {
             statements: [
