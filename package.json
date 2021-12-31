@@ -7,12 +7,11 @@
   "scripts": {
     "comments": "leasot --ignore node_modules/** .git/** --tags NOTE OPTIMIZE TODO HACK XXX FIXME BUG --filetype .ts **",
     "lint": "eslint .",
-    "watch-pretest": "npm run pretest -- --watch",
-    "watch-test": "npm test -- --watchAll",
-    "pretest": "tsc -p ./test/tsconfig.json",
-    "test": "jest --coverage",
-    "prepare": "ts-node ./script/typescript/npm-recursive-sync.ts npm ci && tsc && ts-node ./script/typescript/lambda-bundle.ts",
-    "prepublishOnly": "npm test"
+    "watch-pretest": "tsc -p ./test/tsconfig.json --watch",
+    "watch-test": "jest --coverage --watchAll",
+    "test": "tsc -p ./test/tsconfig.json && jest --coverage",
+    "prepare": "pnpm -r --filter ./src i --frozen-lockfile && tsc && pnpm -r --filter ./src bundle",
+    "prepublishOnly": "pnpm test"
   },
   "repository": {
     "type": "git",

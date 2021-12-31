@@ -2,7 +2,7 @@
     "private": true,
     "main": "./dist/bundle.js",
     "scripts": {
-        "watch": "npm run bundle -- --watch",
+        "watch": "pnpm bundle -- --watch",
         "bundle": "webpack --progress"
     },
     "devDependencies": {

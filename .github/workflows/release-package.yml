@@ -16,10 +16,21 @@ jobs:
         with:
           node-version: 14
           check-latest: true
+      - name: Cache pnpm modules
+        uses: actions/cache@v2
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-
       - name: Clean install dependencies
-        run: npm ci
+        uses: pnpm/action-setup@v2.0.1
+        with:
+          version: 6.20.4
+          run_install: |
+            args: [--frozen-lockfile]
       - name: Test
-        run: npm test
+        run: pnpm test
 
   publish:
     name: Publish
@@ -33,15 +44,26 @@ jobs:
         with:
           node-version: 14
           check-latest: true
+      - name: Cache pnpm modules
+        uses: actions/cache@v2
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-
       - name: Clean install dependencies
-        run: npm ci
+        uses: pnpm/action-setup@v2.0.1
+        with:
+          version: 6.20.4
+          run_install: |
+            args: [--frozen-lockfile]
       - name: Setup Node.js environment for GitHub Package Registry
         uses: actions/setup-node@v2
         with:
           scope: ${{github.repository_owner}}
           registry-url: https://npm.pkg.github.com/
       - name: Publish package to GitHub Package Registry
-        run: npm publish
+        run: pnpm publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{secrets.GITHUB}}
       - name: Setup Node.js environment for npm
@@ -50,6 +72,6 @@ jobs:
           scope: ${{github.repository_owner}}
           registry-url: https://registry.npmjs.org/
       - name: Publish package to npm
-        run: npm publish --access public
+        run: pnpm publish --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{secrets.NPM}}
