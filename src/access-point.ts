@@ -1,8 +1,13 @@
-import * as cdk from '@aws-cdk/core';
-
-import type * as ec2 from '@aws-cdk/aws-ec2';
-import type * as iam from '@aws-cdk/aws-iam';
-import * as s3 from '@aws-cdk/aws-s3';
+import type {
+    aws_ec2 as cdkEc2,
+    aws_iam as cdkIam,
+} from 'aws-cdk-lib';
+import {
+    Construct as AwsConstruct,
+} from 'constructs';
+import {
+    aws_s3 as cdkS3,
+} from 'aws-cdk-lib';
 
 export enum NetworkOrigin {
     VPC = 'VPC',
@@ -10,16 +15,16 @@ export enum NetworkOrigin {
 }
 
 export interface AccessPointProps {
-    readonly bucket: s3.IBucket;
+    readonly bucket: cdkS3.IBucket;
 
-    readonly policy?: iam.PolicyDocument;
+    readonly policy?: cdkIam.PolicyDocument;
 
-    readonly publicAccessBlockConfiguration?: s3.CfnAccessPoint.PublicAccessBlockConfigurationProperty;
+    readonly publicAccessBlockConfiguration?: cdkS3.CfnAccessPoint.PublicAccessBlockConfigurationProperty;
 
-    readonly vpc?: ec2.IVpc;
+    readonly vpc?: cdkEc2.IVpc;
 }
 
-export class AccessPoint extends cdk.Construct {
+export class AccessPoint extends AwsConstruct {
     public readonly name: string;
 
     public readonly arn: string;
@@ -29,10 +34,10 @@ export class AccessPoint extends cdk.Construct {
 
     public readonly networkOrigin: NetworkOrigin;
 
-    public constructor(scope: cdk.Construct, id: string, props: AccessPointProps) {
+    public constructor(scope: AwsConstruct, id: string, props: AccessPointProps) {
         super(scope, id);
 
-        const accessPoint = new s3.CfnAccessPoint(this, 'access-point', {
+        const accessPoint = new cdkS3.CfnAccessPoint(this, 'access-point', {
             bucket:                         props.bucket.bucketName,
             policy:                         JSON.stringify(props.policy),
             publicAccessBlockConfiguration: props.publicAccessBlockConfiguration,

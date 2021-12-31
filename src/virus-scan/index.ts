@@ -1,18 +1,27 @@
-import * as cdk from '@aws-cdk/core';
+import {
+    CustomResource as CdkCustomResource,
+    Duration as CdkDuration,
+    Stack as CdkStack,
+    aws_autoscaling as cdkAutoscaling,
+    aws_cloudwatch as cdkCloudwatch,
+    aws_cloudwatch_actions as cdkCloudwatchActions,
+    custom_resources as cdkCustomResources,
+    aws_ec2 as cdkEc2,
+    aws_iam as cdkIam,
+    aws_lambda as cdkLambda,
+    aws_logs as cdkLogs,
+    aws_sns as cdkSns,
+    aws_sqs as cdkSqs,
+} from 'aws-cdk-lib';
+import {
+    Construct as AwsConstruct,
+} from 'constructs';
+import type {
+    aws_s3 as cdkS3,
+} from 'aws-cdk-lib';
 
-import * as autoscaling from '@aws-cdk/aws-autoscaling';
-import * as cloudwatch from '@aws-cdk/aws-cloudwatch';
-import * as cloudwatchActions from '@aws-cdk/aws-cloudwatch-actions';
-import * as customResources from '@aws-cdk/custom-resources';
-import * as ec2 from '@aws-cdk/aws-ec2';
-import * as iam from '@aws-cdk/aws-iam';
-import * as lambda from '@aws-cdk/aws-lambda';
-import * as logs from '@aws-cdk/aws-logs';
-import type * as s3 from '@aws-cdk/aws-s3';
 import * as sCdk from '@silver886/aws-cdk';
 import * as sEc2 from '@silver886/aws-ec2';
-import * as sns from '@aws-cdk/aws-sns';
-import * as sqs from '@aws-cdk/aws-sqs';
 
 import * as ec2Helper from './ec2/';
 
@@ -23,7 +32,7 @@ export interface VirusScanProps {
         readonly tagKey?: string;
     };
     readonly autoScaling: {
-        readonly instanceType: ec2.InstanceType;
+        readonly instanceType: cdkEc2.InstanceType;
         readonly spotPrice?: number;
         readonly volumeSize: number;
         readonly swapSize: number;
@@ -31,26 +40,26 @@ export interface VirusScanProps {
         readonly maximum: number;
     };
 
-    readonly ec2Vpc?: ec2.IVpc;
-    readonly snsTopic?: sns.ITopic;
+    readonly ec2Vpc?: cdkEc2.IVpc;
+    readonly snsTopic?: cdkSns.ITopic;
 }
 
-export class VirusScan extends cdk.Construct {
-    public readonly ec2Vpc: ec2.IVpc;
+export class VirusScan extends AwsConstruct {
+    public readonly ec2Vpc: cdkEc2.IVpc;
 
-    public readonly snsTopic: sns.ITopic;
+    public readonly snsTopic: cdkSns.ITopic;
 
-    private readonly iamRole: iam.Role;
+    private readonly iamRole: cdkIam.Role;
 
     private readonly lambdaFunction: {
-        readonly sqsGrantSend: lambda.Function;
-        readonly s3PutNotification: lambda.Function;
+        readonly sqsGrantSend: cdkLambda.Function;
+        readonly s3PutNotification: cdkLambda.Function;
     };
 
     private readonly props: VirusScanProps;
 
     // eslint-disable-next-line max-lines-per-function, max-statements
-    public constructor(scope: cdk.Construct, id: string, props: VirusScanProps) {
+    public constructor(scope: AwsConstruct, id: string, props: VirusScanProps) {
         super(scope, id);
         this.props = props;
 
@@ -63,28 +72,28 @@ export class VirusScan extends cdk.Construct {
             props.autoScaling.swapSize < 0 || props.autoScaling.swapSize > 8) throw new Error('AutoScaling.swapSize must be in the range [0-8]');
         /* eslint-enable @typescript-eslint/no-magic-numbers */
 
-        const ec2Vpc = props.ec2Vpc ?? new ec2.Vpc(this, 'vpc', {
+        const ec2Vpc = props.ec2Vpc ?? new cdkEc2.Vpc(this, 'vpc', {
             subnetConfiguration: [
                 {
                     cidrMask:   24,
                     name:       'default',
-                    subnetType: ec2.SubnetType.PUBLIC,
+                    subnetType: cdkEc2.SubnetType.PUBLIC,
                 },
             ],
         });
         this.ec2Vpc = ec2Vpc;
 
-        const snsTopic = props.snsTopic ?? new sns.Topic(this, 'topic', {
-            displayName: `${cdk.Stack.of(scope).stackName}: Virus scan notification`,
+        const snsTopic = props.snsTopic ?? new cdkSns.Topic(this, 'topic', {
+            displayName: `${CdkStack.of(scope).stackName}: Virus scan notification`,
         });
         this.snsTopic = snsTopic;
 
-        const deadLetterQueue = new sqs.Queue(this, 'queue-dead-letter', {
-            retentionPeriod: cdk.Duration.days(14), // eslint-disable-line @typescript-eslint/no-magic-numbers
+        const deadLetterQueue = new cdkSqs.Queue(this, 'queue-dead-letter', {
+            retentionPeriod: CdkDuration.days(14), // eslint-disable-line @typescript-eslint/no-magic-numbers
         });
 
-        const scanQueue = new sqs.Queue(this, 'queue', {
-            visibilityTimeout: cdk.Duration.minutes(5), // eslint-disable-line @typescript-eslint/no-magic-numbers
+        const scanQueue = new cdkSqs.Queue(this, 'queue', {
+            visibilityTimeout: CdkDuration.minutes(5), // eslint-disable-line @typescript-eslint/no-magic-numbers
             deadLetterQueue:   {
                 queue:           deadLetterQueue,
                 maxReceiveCount: 3,
@@ -92,11 +101,11 @@ export class VirusScan extends cdk.Construct {
         });
 
         this.lambdaFunction = {
-            sqsGrantSend: new lambda.Function(scanQueue, 'lambda-sqs-grant-send', {
-                description:   `${cdk.Stack.of(scope).stackName}: SQS Queue send message permission`,
+            sqsGrantSend: new cdkLambda.Function(scanQueue, 'lambda-sqs-grant-send', {
+                description:   `${CdkStack.of(scope).stackName}: SQS Queue send message permission`,
                 initialPolicy: [
-                    new iam.PolicyStatement({
-                        effect:  iam.Effect.ALLOW,
+                    new cdkIam.PolicyStatement({
+                        effect:  cdkIam.Effect.ALLOW,
                         actions: [
                             'sqs:GetQueueAttributes',
                             'sqs:SetQueueAttributes',
@@ -110,37 +119,37 @@ export class VirusScan extends cdk.Construct {
                     sqsArn: scanQueue.queueArn,
                     sqsUrl: scanQueue.queueUrl,
                 },
-                runtime: lambda.Runtime.NODEJS_14_X,
-                code:    lambda.Code.fromAsset(`${__dirname}/lambda/sqs-grant-send`),
+                runtime: cdkLambda.Runtime.NODEJS_14_X,
+                code:    cdkLambda.Code.fromAsset(`${__dirname}/lambda/sqs-grant-send`),
                 handler: 'bundle.handler',
             }),
-            s3PutNotification: new lambda.Function(scanQueue, 'lambda-s3-put-notification', {
-                description: `${cdk.Stack.of(scope).stackName}: S3 Object creation notification configuration`,
+            s3PutNotification: new cdkLambda.Function(scanQueue, 'lambda-s3-put-notification', {
+                description: `${CdkStack.of(scope).stackName}: S3 Object creation notification configuration`,
                 environment: {
                     sqsArn: scanQueue.queueArn,
                 },
-                runtime: lambda.Runtime.NODEJS_14_X,
-                code:    lambda.Code.fromAsset(`${__dirname}/lambda/s3-put-notification`),
+                runtime: cdkLambda.Runtime.NODEJS_14_X,
+                code:    cdkLambda.Code.fromAsset(`${__dirname}/lambda/s3-put-notification`),
                 handler: 'bundle.handler',
             }),
         };
 
-        const logGroup = new logs.LogGroup(this, 'log', {
-            retention: logs.RetentionDays.FIVE_YEARS,
+        const logGroup = new cdkLogs.LogGroup(this, 'log', {
+            retention: cdkLogs.RetentionDays.FIVE_YEARS,
         });
 
-        const role = new iam.Role(this, 'role', {
-            assumedBy:       new iam.ServicePrincipal('ec2.amazonaws.com'),
-            description:     `${cdk.Stack.of(this).stackName}: EC2 virus scanner`,
+        const role = new cdkIam.Role(this, 'role', {
+            assumedBy:       new cdkIam.ServicePrincipal('cdkEc2.amazonaws.com'),
+            description:     `${CdkStack.of(this).stackName}: EC2 virus scanner`,
             managedPolicies: [
-                iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
-                iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
+                cdkIam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+                cdkIam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
             ],
             inlinePolicies: {
-                sqs: new iam.PolicyDocument({
+                sqs: new cdkIam.PolicyDocument({
                     statements: [
-                        new iam.PolicyStatement({
-                            effect:  iam.Effect.ALLOW,
+                        new cdkIam.PolicyStatement({
+                            effect:  cdkIam.Effect.ALLOW,
                             actions: [
                                 'sqs:DeleteMessage',
                                 'sqs:ReceiveMessage',
@@ -151,10 +160,10 @@ export class VirusScan extends cdk.Construct {
                         }),
                     ],
                 }),
-                sns: new iam.PolicyDocument({
+                sns: new cdkIam.PolicyDocument({
                     statements: [
-                        new iam.PolicyStatement({
-                            effect:  iam.Effect.ALLOW,
+                        new cdkIam.PolicyStatement({
+                            effect:  cdkIam.Effect.ALLOW,
                             actions: [
                                 'sns:Publish',
                             ],
@@ -168,10 +177,10 @@ export class VirusScan extends cdk.Construct {
         });
         this.iamRole = role;
 
-        const group = new autoscaling.AutoScalingGroup(this, 'group', {
+        const group = new cdkAutoscaling.AutoScalingGroup(this, 'group', {
             vpc:        ec2Vpc,
             vpcSubnets: {
-                subnetType: ec2.SubnetType.PUBLIC,
+                subnetType: cdkEc2.SubnetType.PUBLIC,
             },
             allowAllOutbound: true,
             role,
@@ -179,16 +188,16 @@ export class VirusScan extends cdk.Construct {
             maxCapacity:      props.autoScaling.maximum,
             blockDevices:     [{
                 deviceName: '/dev/xvda',
-                volume:     autoscaling.BlockDeviceVolume.ebs(props.autoScaling.volumeSize, {
+                volume:     cdkAutoscaling.BlockDeviceVolume.ebs(props.autoScaling.volumeSize, {
                     encrypted: true,
                 }),
             }],
             instanceType: props.autoScaling.instanceType,
             spotPrice:    props.autoScaling.spotPrice ? props.autoScaling.spotPrice.toString() : undefined, // eslint-disable-line no-undefined
-            machineImage: new ec2.AmazonLinuxImage({
-                generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
+            machineImage: new cdkEc2.AmazonLinuxImage({
+                generation: cdkEc2.AmazonLinuxGeneration.AMAZON_LINUX_2,
             }),
-            init: ec2.CloudFormationInit.fromConfigSets({
+            init: cdkEc2.CloudFormationInit.fromConfigSets({
                 configSets: {
                     default: [
                         ...props.autoScaling.swapSize ? ['swap'] : [],
@@ -231,8 +240,8 @@ export class VirusScan extends cdk.Construct {
                             },
                         },
                         metrics: {
-                            namespace:         `${cdk.Stack.of(this).stackName}/VirusScan`,
-                            append_dimensions: {
+                            namespace:     `${CdkStack.of(this).stackName}/VirusScan`,
+                            dimensionsMap: {
                                 InstanceType:         '${aws:InstanceType}',
                                 AutoScalingGroupName: '${aws:AutoScalingGroupName}',
                             },
@@ -265,25 +274,25 @@ export class VirusScan extends cdk.Construct {
                         deleteInfected: props.action.deleteInfected,
                         reportClean:    props.action.reportClean,
                         tagKey:         props.action.tagKey,
-                        region:         cdk.Stack.of(this).region,
+                        region:         CdkStack.of(this).region,
                         queueUrl:       scanQueue.queueUrl,
                         topicArn:       snsTopic.topicArn,
                         volumeSize:     props.autoScaling.volumeSize,
                     }),
                 },
             }),
-            signals:       autoscaling.Signals.waitForAll(),
+            signals:       cdkAutoscaling.Signals.waitForAll(),
             notifications: [{
                 topic: snsTopic,
             }],
         });
 
         const scalingInterval = 5;
-        const stepScalingUp = new autoscaling.StepScalingAction(group, 'step_scaling-up', {
+        const stepScalingUp = new cdkAutoscaling.StepScalingAction(group, 'step_scaling-up', {
             autoScalingGroup:        group,
-            estimatedInstanceWarmup: cdk.Duration.minutes(scalingInterval),
-            adjustmentType:          autoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
-            metricAggregationType:   autoscaling.MetricAggregationType.MAXIMUM,
+            estimatedInstanceWarmup: CdkDuration.minutes(scalingInterval),
+            adjustmentType:          cdkAutoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
+            metricAggregationType:   cdkAutoscaling.MetricAggregationType.MAXIMUM,
         });
         stepScalingUp.addAdjustment({
             lowerBound: 0,
@@ -320,9 +329,9 @@ export class VirusScan extends cdk.Construct {
             adjustment: 64,
         });
 
-        const stepScalingDown = new autoscaling.StepScalingAction(group, 'step_scaling-down', {
+        const stepScalingDown = new cdkAutoscaling.StepScalingAction(group, 'step_scaling-down', {
             autoScalingGroup:       group,
-            adjustmentType:         autoscaling.AdjustmentType.PERCENT_CHANGE_IN_CAPACITY,
+            adjustmentType:         cdkAutoscaling.AdjustmentType.PERCENT_CHANGE_IN_CAPACITY,
             minAdjustmentMagnitude: 1,
         });
         stepScalingDown.addAdjustment({
@@ -331,101 +340,101 @@ export class VirusScan extends cdk.Construct {
         });
 
         const scanQueueVisibleMessagesPeriod = 5;
-        new cloudwatch.Alarm(scanQueue, 'alarm-number_of_visible_messages_too_high', {
-            alarmDescription: `${cdk.Stack.of(this).stackName}: SQS maximum number of visible messages over last ${scanQueueVisibleMessagesPeriod} minutes higher than 1`,
-            metric:           new cloudwatch.Metric({
-                namespace:  'AWS/SQS',
-                metricName: 'ApproximateNumberOfMessagesVisible',
-                period:     cdk.Duration.minutes(scanQueueVisibleMessagesPeriod),
-                statistic:  'Maximum',
-                dimensions: {
+        new cdkCloudwatch.Alarm(scanQueue, 'alarm-number_of_visible_messages_too_high', {
+            alarmDescription: `${CdkStack.of(this).stackName}: SQS maximum number of visible messages over last ${scanQueueVisibleMessagesPeriod} minutes higher than 1`,
+            metric:           new cdkCloudwatch.Metric({
+                namespace:     'AWS/SQS',
+                metricName:    'ApproximateNumberOfMessagesVisible',
+                period:        CdkDuration.minutes(scanQueueVisibleMessagesPeriod),
+                statistic:     'Maximum',
+                dimensionsMap: {
                     /* eslint-disable @typescript-eslint/naming-convention */
                     QueueName: scanQueue.queueName,
                     /* eslint-enable @typescript-eslint/naming-convention */
                 },
             }),
-            comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+            comparisonOperator: cdkCloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
             threshold:          1,
             evaluationPeriods:  1,
-            treatMissingData:   cloudwatch.TreatMissingData.BREACHING,
-        }).addAlarmAction(new cloudwatchActions.AutoScalingAction(stepScalingUp));
+            treatMissingData:   cdkCloudwatch.TreatMissingData.BREACHING,
+        }).addAlarmAction(new cdkCloudwatchActions.AutoScalingAction(stepScalingUp));
 
-        new cloudwatch.Alarm(scanQueue, 'alarm-number_of_visible_messages_too_low', {
-            alarmDescription: `${cdk.Stack.of(this).stackName}: SQS maximum number of visible messages over last ${scanQueueVisibleMessagesPeriod} minutes lower than 1`,
-            metric:           new cloudwatch.Metric({
-                namespace:  'AWS/SQS',
-                metricName: 'ApproximateNumberOfMessagesVisible',
-                period:     cdk.Duration.minutes(scanQueueVisibleMessagesPeriod),
-                statistic:  'Maximum',
-                dimensions: {
+        new cdkCloudwatch.Alarm(scanQueue, 'alarm-number_of_visible_messages_too_low', {
+            alarmDescription: `${CdkStack.of(this).stackName}: SQS maximum number of visible messages over last ${scanQueueVisibleMessagesPeriod} minutes lower than 1`,
+            metric:           new cdkCloudwatch.Metric({
+                namespace:     'AWS/SQS',
+                metricName:    'ApproximateNumberOfMessagesVisible',
+                period:        CdkDuration.minutes(scanQueueVisibleMessagesPeriod),
+                statistic:     'Maximum',
+                dimensionsMap: {
                     /* eslint-disable @typescript-eslint/naming-convention */
                     QueueName: scanQueue.queueName,
                     /* eslint-enable @typescript-eslint/naming-convention */
                 },
             }),
-            comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_OR_EQUAL_TO_THRESHOLD,
+            comparisonOperator: cdkCloudwatch.ComparisonOperator.LESS_THAN_OR_EQUAL_TO_THRESHOLD,
             threshold:          1,
             evaluationPeriods:  1,
-            treatMissingData:   cloudwatch.TreatMissingData.BREACHING,
-        }).addAlarmAction(new cloudwatchActions.AutoScalingAction(stepScalingDown));
+            treatMissingData:   cdkCloudwatch.TreatMissingData.BREACHING,
+        }).addAlarmAction(new cdkCloudwatchActions.AutoScalingAction(stepScalingDown));
 
         const statusAlarmPeriod = 1;
-        new cloudwatch.Alarm(deadLetterQueue, 'alarm-has_messages', {
-            alarmDescription: `${cdk.Stack.of(this).stackName}: SQS dead letter queue has messages`,
-            metric:           new cloudwatch.Metric({
-                namespace:  'AWS/SQS',
-                metricName: 'ApproximateNumberOfMessagesVisible',
-                period:     cdk.Duration.minutes(statusAlarmPeriod),
-                statistic:  'Sum',
-                dimensions: {
+        new cdkCloudwatch.Alarm(deadLetterQueue, 'alarm-has_messages', {
+            alarmDescription: `${CdkStack.of(this).stackName}: SQS dead letter queue has messages`,
+            metric:           new cdkCloudwatch.Metric({
+                namespace:     'AWS/SQS',
+                metricName:    'ApproximateNumberOfMessagesVisible',
+                period:        CdkDuration.minutes(statusAlarmPeriod),
+                statistic:     'Sum',
+                dimensionsMap: {
                     /* eslint-disable @typescript-eslint/naming-convention */
                     QueueName: deadLetterQueue.queueName,
                     /* eslint-enable @typescript-eslint/naming-convention */
                 },
             }),
-            comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            comparisonOperator: cdkCloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
             threshold:          1,
             evaluationPeriods:  1,
-            treatMissingData:   cloudwatch.TreatMissingData.NOT_BREACHING,
-        }).addAlarmAction(new cloudwatchActions.SnsAction(snsTopic));
+            treatMissingData:   cdkCloudwatch.TreatMissingData.NOT_BREACHING,
+        }).addAlarmAction(new cdkCloudwatchActions.SnsAction(snsTopic));
 
         const scanQueueMessageAge = 1;
-        new cloudwatch.Alarm(scanQueue, `alarm-contains_messages_older_than_${scanQueueMessageAge}_hour`, {
-            alarmDescription: `${cdk.Stack.of(this).stackName}: SQS scan queue contains messages older than ${scanQueueMessageAge} hour`,
-            metric:           new cloudwatch.Metric({
-                namespace:  'AWS/SQS',
-                metricName: 'ApproximateAgeOfOldestMessage',
-                period:     cdk.Duration.minutes(statusAlarmPeriod),
-                statistic:  'Maximum',
-                dimensions: {
+        new cdkCloudwatch.Alarm(scanQueue, `alarm-contains_messages_older_than_${scanQueueMessageAge}_hour`, {
+            alarmDescription: `${CdkStack.of(this).stackName}: SQS scan queue contains messages older than ${scanQueueMessageAge} hour`,
+            metric:           new cdkCloudwatch.Metric({
+                namespace:     'AWS/SQS',
+                metricName:    'ApproximateAgeOfOldestMessage',
+                period:        CdkDuration.minutes(statusAlarmPeriod),
+                statistic:     'Maximum',
+                dimensionsMap: {
                     /* eslint-disable @typescript-eslint/naming-convention */
                     QueueName: scanQueue.queueName,
                     /* eslint-enable @typescript-eslint/naming-convention */
                 },
             }),
-            comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-            threshold:          cdk.Duration.hours(scanQueueMessageAge).toSeconds(),
+            comparisonOperator: cdkCloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+            threshold:          CdkDuration.hours(scanQueueMessageAge).toSeconds(),
             evaluationPeriods:  1,
-            treatMissingData:   cloudwatch.TreatMissingData.NOT_BREACHING,
-        }).addAlarmAction(new cloudwatchActions.SnsAction(snsTopic));
+            treatMissingData:   cdkCloudwatch.TreatMissingData.NOT_BREACHING,
+        }).addAlarmAction(new cdkCloudwatchActions.SnsAction(snsTopic));
     }
 
     // eslint-disable-next-line max-lines-per-function, max-statements
-    public hookS3Bucket(scope: cdk.Construct, bucket: s3.IBucket): sCdk.Name {
+    public hookS3Bucket(scope: AwsConstruct, bucket: cdkS3.IBucket): sCdk.Name {
         const nestedScope = new sCdk.Name(scope, 'virus-scanner');
 
         const s3NotificationPolicy = new sCdk.Name(nestedScope, 's3-notification-policy');
-        const s3PolicySdkCall: customResources.AwsSdkCall = {
+        const s3PolicySdkCall: cdkCustomResources.AwsSdkCall = {
             service:    'IAM',
             action:     'putRolePolicy',
             parameters: {
                 /* eslint-disable @typescript-eslint/naming-convention */
                 RoleName:       this.lambdaFunction.s3PutNotification.role?.roleName,
                 PolicyName:     s3NotificationPolicy.logical,
-                PolicyDocument: JSON.stringify(new iam.PolicyDocument({
+                PolicyDocument: JSON.stringify(new cdkIam.PolicyDocument({
                     statements: [
-                        new iam.PolicyStatement({
-                            effect:  iam.Effect.ALLOW,
+                        new cdkIam.PolicyStatement({
+                            effect:  cdkIam.Effect.ALLOW,
                             actions: [
                                 's3:GetBucketNotification',
                                 's3:PutBucketNotification',
@@ -438,9 +447,9 @@ export class VirusScan extends cdk.Construct {
                 })),
                 /* eslint-enable @typescript-eslint/naming-convention */
             },
-            physicalResourceId: customResources.PhysicalResourceId.of(s3NotificationPolicy.node.addr),
+            physicalResourceId: cdkCustomResources.PhysicalResourceId.of(s3NotificationPolicy.node.addr),
         };
-        const s3Policy = new customResources.AwsCustomResource(s3NotificationPolicy, 'custom-resource', {
+        const s3Policy = new cdkCustomResources.AwsCustomResource(s3NotificationPolicy, 'custom-resource', {
             resourceType: 'Custom::IAM-putRolePolicy',
             onCreate:     s3PolicySdkCall,
             onUpdate:     s3PolicySdkCall,
@@ -454,17 +463,17 @@ export class VirusScan extends cdk.Construct {
                     /* eslint-enable @typescript-eslint/naming-convention */
                 },
             },
-            policy: customResources.AwsCustomResourcePolicy.fromSdkCalls({
+            policy: cdkCustomResources.AwsCustomResourcePolicy.fromSdkCalls({
                 resources: [
                     this.lambdaFunction.s3PutNotification.role?.roleArn ?? '',
                 ],
             }),
         });
 
-        const sqsPolicy = new cdk.CustomResource(nestedScope, 'custom-resource-sqs', {
+        const sqsPolicy = new CdkCustomResource(nestedScope, 'custom-resource-sqs', {
             resourceType: 'Custom::SQS-updateQueuePolicy',
             properties:   {
-                account: cdk.Stack.of(bucket).account,
+                account: CdkStack.of(bucket).account,
                 s3Arn:   bucket.bucketArn,
             },
             serviceToken: this.lambdaFunction.sqsGrantSend.functionArn,
@@ -472,10 +481,10 @@ export class VirusScan extends cdk.Construct {
         sqsPolicy.node.addDependency(s3Policy);
 
         // eslint-disable-next-line no-new
-        new cdk.CustomResource(nestedScope, 'custom-resource-s3', {
+        new CdkCustomResource(nestedScope, 'custom-resource-s3', {
             resourceType: 'Custom::S3-updateBucketNotification',
             properties:   {
-                account: cdk.Stack.of(bucket).account,
+                account: CdkStack.of(bucket).account,
                 s3Name:  bucket.bucketName,
             },
             serviceToken: this.lambdaFunction.s3PutNotification.functionArn,
@@ -483,10 +492,10 @@ export class VirusScan extends cdk.Construct {
             dependencies: [sqsPolicy],
         }));
 
-        this.iamRole.attachInlinePolicy(new iam.Policy(nestedScope, 'policy-read', {
+        this.iamRole.attachInlinePolicy(new cdkIam.Policy(nestedScope, 'policy-read', {
             statements: [
-                new iam.PolicyStatement({
-                    effect:  iam.Effect.ALLOW,
+                new cdkIam.PolicyStatement({
+                    effect:  cdkIam.Effect.ALLOW,
                     actions: [
                         's3:GetObject*',
                     ],
@@ -494,8 +503,8 @@ export class VirusScan extends cdk.Construct {
                         bucket.arnForObjects('*'),
                     ],
                 }),
-                new iam.PolicyStatement({
-                    effect:  iam.Effect.ALLOW,
+                new cdkIam.PolicyStatement({
+                    effect:  cdkIam.Effect.ALLOW,
                     actions: [
                         's3:ListBucket*',
                     ],
@@ -507,10 +516,10 @@ export class VirusScan extends cdk.Construct {
         }));
 
         if (this.props.action.deleteInfected) {
-            this.iamRole.attachInlinePolicy(new iam.Policy(nestedScope, 'policy-delete', {
+            this.iamRole.attachInlinePolicy(new cdkIam.Policy(nestedScope, 'policy-delete', {
                 statements: [
-                    new iam.PolicyStatement({
-                        effect:  iam.Effect.ALLOW,
+                    new cdkIam.PolicyStatement({
+                        effect:  cdkIam.Effect.ALLOW,
                         actions: [
                             's3:DeleteObject*',
                         ],
@@ -523,10 +532,10 @@ export class VirusScan extends cdk.Construct {
         }
 
         if (this.props.action.tagKey) {
-            this.iamRole.attachInlinePolicy(new iam.Policy(nestedScope, 'policy-tag', {
+            this.iamRole.attachInlinePolicy(new cdkIam.Policy(nestedScope, 'policy-tag', {
                 statements: [
-                    new iam.PolicyStatement({
-                        effect:  iam.Effect.ALLOW,
+                    new cdkIam.PolicyStatement({
+                        effect:  cdkIam.Effect.ALLOW,
                         actions: [
                             's3:PutObjectTagging',
                             's3:PutObjectVersionTagging',

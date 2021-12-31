@@ -1,7 +1,11 @@
-import * as cdk from '@aws-cdk/core';
-
-import * as customResources from '@aws-cdk/custom-resources';
-import * as iam from '@aws-cdk/aws-iam';
+import {
+    Stack as CdkStack,
+    custom_resources as cdkCustomResources,
+    aws_iam as cdkIam,
+} from 'aws-cdk-lib';
+import type {
+    Construct as AwsConstruct,
+} from 'constructs';
 
 import {AccessPoint} from './access-point';
 import type {AccessPointProps} from './access-point';
@@ -9,13 +13,13 @@ import type {AccessPointProps} from './access-point';
 export interface ObjectAccessPointProps extends AccessPointProps {
     readonly key: string;
 
-    readonly policyStatements: iam.PolicyStatement[];
+    readonly policyStatements: cdkIam.PolicyStatement[];
 }
 
 export class ObjectAccessPoint extends AccessPoint {
     public readonly key: string;
 
-    public constructor(scope: cdk.Construct, id: string, props: ObjectAccessPointProps) {
+    public constructor(scope: AwsConstruct, id: string, props: ObjectAccessPointProps) {
         props.policyStatements.forEach((v) => {
             if (v.hasResource) throw new Error('Customized resource is not supported by object Access Points.');
         });
@@ -26,27 +30,27 @@ export class ObjectAccessPoint extends AccessPoint {
             v.addResources(`${this.arn}/object/${props.key}`);
         });
 
-        const sdkCall: customResources.AwsSdkCall = {
+        const sdkCall: cdkCustomResources.AwsSdkCall = {
             service:    'S3Control',
             action:     'putAccessPointPolicy',
             parameters: {
                 /* eslint-disable @typescript-eslint/naming-convention */
-                AccountId: cdk.Stack.of(this).account,
+                AccountId: CdkStack.of(this).account,
                 Name:      this.name,
-                Policy:    JSON.stringify(new iam.PolicyDocument({statements: props.policyStatements})),
+                Policy:    JSON.stringify(new cdkIam.PolicyDocument({statements: props.policyStatements})),
                 /* eslint-enable @typescript-eslint/naming-convention */
             },
-            physicalResourceId: customResources.PhysicalResourceId.of(this.node.addr),
+            physicalResourceId: cdkCustomResources.PhysicalResourceId.of(this.node.addr),
         };
 
         // eslint-disable-next-line no-new
-        new customResources.AwsCustomResource(this, 'policy', {
+        new cdkCustomResources.AwsCustomResource(this, 'policy', {
             resourceType: 'Custom::S3Control-putAccessPointPolicy',
             onCreate:     sdkCall,
             onUpdate:     sdkCall,
-            policy:       customResources.AwsCustomResourcePolicy.fromStatements([
-                new iam.PolicyStatement({
-                    effect:  iam.Effect.ALLOW,
+            policy:       cdkCustomResources.AwsCustomResourcePolicy.fromStatements([
+                new cdkIam.PolicyStatement({
+                    effect:  cdkIam.Effect.ALLOW,
                     actions: [
                         's3:PutAccessPointPolicy',
                     ],

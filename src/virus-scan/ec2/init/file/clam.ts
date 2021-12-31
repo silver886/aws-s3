@@ -1,7 +1,9 @@
-import * as ec2 from '@aws-cdk/aws-ec2';
+import {
+    aws_ec2 as cdkEc2,
+} from 'aws-cdk-lib';
 
-export function daemon(serviceRestartHandles?: ec2.InitServiceRestartHandle[]): ec2.InitFile {
-    return ec2.InitFile.fromString('/opt/aws-s3-virus-scan/daemon.rb', '' +
+export function daemon(serviceRestartHandles?: cdkEc2.InitServiceRestartHandle[]): cdkEc2.InitFile {
+    return cdkEc2.InitFile.fromString('/opt/aws-s3-virus-scan/daemon.rb', '' +
         '#!/usr/bin/env ruby\n' +
         'require \'daemons\'\n' +
         'Daemons.run(__dir__ + \'/worker.rb\', {:app_name => \'s3-virus-scan\', :monitor => true, :dir_mode => :system, :log_output_syslog => true})', {
@@ -11,8 +13,8 @@ export function daemon(serviceRestartHandles?: ec2.InitServiceRestartHandle[]): 
 }
 
 // eslint-disable-next-line max-lines-per-function
-export function worker(serviceRestartHandles?: ec2.InitServiceRestartHandle[]): ec2.InitFile {
-    return ec2.InitFile.fromString('/opt/aws-s3-virus-scan/worker.rb', '' +
+export function worker(serviceRestartHandles?: cdkEc2.InitServiceRestartHandle[]): cdkEc2.InitFile {
+    return cdkEc2.InitFile.fromString('/opt/aws-s3-virus-scan/worker.rb', '' +
         '#!/usr/bin/env ruby\n' +
         'require \'aws-sdk-sqs\'\n' +
         'require \'aws-sdk-sns\'\n' +
@@ -210,8 +212,8 @@ export interface Config {
     volumeSize: number;
 }
 
-export function config(cfg: Config, serviceRestartHandles?: ec2.InitServiceRestartHandle[]): ec2.InitFile {
-    return ec2.InitFile.fromString('/opt/aws-s3-virus-scan/s3-virus-scan.conf', '' +
+export function config(cfg: Config, serviceRestartHandles?: cdkEc2.InitServiceRestartHandle[]): cdkEc2.InitFile {
+    return cdkEc2.InitFile.fromString('/opt/aws-s3-virus-scan/s3-virus-scan.conf', '' +
         `delete: ${cfg.deleteInfected ? 'true' : 'false'}\n` +
         `report_clean: ${cfg.reportClean ? 'true' : 'false'}\n` +
         `tag_files: ${cfg.tagKey ? 'true' : 'false'}\n` +
@@ -224,8 +226,8 @@ export function config(cfg: Config, serviceRestartHandles?: ec2.InitServiceResta
     });
 }
 
-export function service(serviceRestartHandles?: ec2.InitServiceRestartHandle[]): ec2.InitFile {
-    return ec2.InitFile.fromString('/etc/init.d/s3-virus-scan', '' +
+export function service(serviceRestartHandles?: cdkEc2.InitServiceRestartHandle[]): cdkEc2.InitFile {
+    return cdkEc2.InitFile.fromString('/etc/init.d/s3-virus-scan', '' +
         '#!/usr/bin/env ruby\n' +
         '# chkconfig:    - 80 20\n' +
         'APP_NAME = \'s3-virus-scan\'\n' +
