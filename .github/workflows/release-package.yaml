@@ -2,12 +2,16 @@ name: Node.js package
 
 on:
   release:
-    types: [created]
+    types:
+      - released
+  workflow_call:
 
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -36,6 +40,9 @@ jobs:
     name: Publish
     needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -65,7 +72,7 @@ jobs:
       - name: Publish package to GitHub Package Registry
         run: pnpm publish --no-git-checks
         env:
-          NODE_AUTH_TOKEN: ${{secrets.GITHUB}}
+          NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}
       - name: Setup Node.js environment for npm
         uses: actions/setup-node@v2
         with:
