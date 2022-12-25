@@ -8,21 +8,16 @@ on:
 jobs:
   create-release:
     name: Create release
-    runs-on: ubuntu-latest
     permissions:
       contents: write
-    steps:
-      - name: Create release
-        uses: softprops/action-gh-release@v1
-        with:
-          name: Release ${{github.ref_name}}
+    uses: silver886/github-actions/.github/workflows/create-release.yaml@master
 
-  release-package:
-    name: Node.js package
+  release-npm:
+    name: Release npm package
     needs: create-release
     permissions:
       contents: read
       packages: write
-    uses: ./.github/workflows/release-package.yaml
+    uses: silver886/github-actions/.github/workflows/release-npm.yaml@master
     secrets:
-      NPM: ${{secrets.NPM}}
+      NPM: ${{ secrets.NPM }}
